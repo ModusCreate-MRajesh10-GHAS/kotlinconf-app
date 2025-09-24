@@ -35,7 +35,7 @@ jobs:
         wget -q https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
         unzip -q codeql-linux64.zip
         echo "$GITHUB_WORKSPACE/codeql" >> $GITHUB_PATH
-
+        
     - name: Create CodeQL Database
       if: matrix.language == 'java-kotlin'
       run: |
@@ -52,7 +52,8 @@ jobs:
           --format=sarif-latest \
           --output=results.sarif \
           --sarif-category="/language:java-kotlin" \
-          codeql/java-queries:codeql-suites/java-security-extended.qls
+          --download \
+          codeql/java-queries:codeql-suites/java-security-and-quality.qls
 
     - name: Upload CodeQL Results
       if: matrix.language == 'java-kotlin'
