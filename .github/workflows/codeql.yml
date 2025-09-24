@@ -29,30 +29,35 @@ jobs:
         distribution: 'zulu'
         java-version: 21
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: ${{ matrix.language }}
-        queries: +security-extended,security-and-quality
-
-    - name: Autobuild
-      if: matrix.language == 'swift'
-      uses: github/codeql-action/autobuild@v3
-
-    - name: Build Kotlin/Java components
+    - name: Setup CodeQL CLI
       if: matrix.language == 'java-kotlin'
       run: |
-        ./gradlew clean
-        ./gradlew :shared:jvmJar
-        ./gradlew :backend:jar
-        ./gradlew :androidApp:assembleDebug
+        wget -q https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
+        unzip -q codeql-linux64.zip
+        echo "$GITHUB_WORKSPACE/codeql" >> $GITHUB_PATH
 
-    - name: Build JavaScript/Web components
-      if: matrix.language == 'javascript'
+    - name: Create CodeQL Database
+      if: matrix.language == 'java-kotlin'
       run: |
-        ./gradlew buildWebApp
+        codeql database create codeql-db \
+          --language=java \
+          --source-root=. \
+          --overwrite \
+          --command="./gradlew clean :shared:jvmJar :backend:jar :androidApp:assembleDebug --no-daemon --no-build-cache --no-configuration-cache"
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+    - name: Run CodeQL Analysis
+      if: matrix.language == 'java-kotlin'
+      run: |
+        codeql database analyze codeql-db \
+          --format=sarif-latest \
+          --output=results.sarif \
+          --sarif-category="/language:java-kotlin" \
+          codeql/java-queries:codeql-suites/java-security-extended.qls
+
+    - name: Upload CodeQL Results
+      if: matrix.language == 'java-kotlin'
+      uses: github/codeql-action/upload-sarif@v3
       with:
-        category: "/language:${{matrix.language}}"
+        sarif_file: results.sarif
+        category: "/language:java-kotlin"
+
