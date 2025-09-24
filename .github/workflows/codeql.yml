@@ -2,7 +2,7 @@ name: "CodeQL Security Analysis"
 
 on:
   push:
-    branches: [ "codeql" ]
+    branches: [ "codeql-nix" ]
 
 jobs:
   analyze:
@@ -22,38 +22,73 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up JDK 21
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@786fff0690178f1234e4e1fe9b536e94f5433196 # v20
+
+    - name: Create Nix Shell Script
       if: matrix.language == 'java-kotlin'
-      uses: actions/setup-java@v4
+      run: |
+        cat > shell.nix << 'EOF'
+        { pkgs ? import <nixpkgs> {} }:
+        pkgs.mkShell {
+          buildInputs = with pkgs; [
+            jdk21
+            git
+            cacert
+            codeql
+          ];
+          
+          shellHook = ''
+            export JAVA_HOME=${pkgs.jdk21}
+            export PATH=$JAVA_HOME/bin:$PATH
+            export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+          '';
+        }
+        EOF
+
+    - name: Setup and run CodeQL in Nix
+      if: matrix.language == 'java-kotlin'
+      uses: tweag/run-nix-shell@21848ee2773c9685ef0655231db681245ae0c68f
       with:
-        distribution: 'zulu'
-        java-version: 21
-
-    - name: Setup CodeQL CLI
-      if: matrix.language == 'java-kotlin'
-      run: |
-        wget -q https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.zip
-        unzip -q codeql-linux64.zip
-        echo "$GITHUB_WORKSPACE/codeql" >> $GITHUB_PATH
-        
-    - name: Create CodeQL Database
-      if: matrix.language == 'java-kotlin'
-      run: |
-        codeql database create codeql-db \
-          --language=java \
-          --source-root=. \
-          --overwrite \
-          --command="./gradlew clean :shared:jvmJar :backend:jar :androidApp:assembleDebug --no-daemon --no-build-cache --no-configuration-cache"
-
-    - name: Run CodeQL Analysis
-      if: matrix.language == 'java-kotlin'
-      run: |
-        codeql database analyze codeql-db \
-          --format=sarif-latest \
-          --output=results.sarif \
-          --sarif-category="/language:java-kotlin" \
-          --download \
-          codeql/java-queries:codeql-suites/java-security-and-quality.qls
+        run: |
+          set -euo pipefail  # Exit on error, undefined vars, pipe failures
+          
+          # Verify Java is available
+          echo "Java version:"
+          java -version
+          
+          # Verify CodeQL is working
+          echo "CodeQL version:"
+          codeql version
+          
+          # Make gradlew executable (in case it's not)
+          chmod +x ./gradlew
+          
+          # Create CodeQL Database
+          echo "Creating CodeQL database..."
+          codeql database create codeql-db \
+            --language=java \
+            --source-root=. \
+            --overwrite \
+            --command="./gradlew clean :shared:jvmJar :backend:jar :androidApp:assembleDebug --no-daemon --no-build-cache --no-configuration-cache"
+          
+          # Verify database was created
+          echo "Database created, contents:"
+          ls -la codeql-db/
+          
+          # Run CodeQL Analysis
+          echo "Running CodeQL analysis..."
+          codeql database analyze codeql-db \
+            --format=sarif-latest \
+            --output=results.sarif \
+            --sarif-category="/language:java-kotlin" \
+            --download \
+            codeql/java-queries:codeql-suites/java-security-and-quality.qls
+          
+          # Verify results file was created
+          echo "Analysis complete, checking results..."
+          ls -la results.sarif
+          wc -l results.sarif
 
     - name: Upload CodeQL Results
       if: matrix.language == 'java-kotlin'
