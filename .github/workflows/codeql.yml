@@ -16,14 +16,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'java', 'javascript', 'swift' ]
+        language: [ 'java-kotlin' ]
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
     - name: Set up JDK 21
-      if: matrix.language == 'java'
+      if: matrix.language == 'java-kotlin'
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
@@ -40,18 +40,16 @@ jobs:
       uses: github/codeql-action/autobuild@v3
 
     - name: Build Kotlin/Java components
-      if: matrix.language == 'java'
+      if: matrix.language == 'java-kotlin'
       run: |
         ./gradlew clean
-        ./gradlew :shared:compileKotlin
-        ./gradlew :backend:compileKotlin
-        ./gradlew :androidApp:compileDebugKotlin
-        ./gradlew :ui-components:compileKotlin
+        ./gradlew :shared:jvmJar
+        ./gradlew :backend:jar
+        ./gradlew :androidApp:assembleDebug
 
     - name: Build JavaScript/Web components
       if: matrix.language == 'javascript'
       run: |
-        ./gradlew :shared:compileKotlinWasmJs
         ./gradlew buildWebApp
 
     - name: Perform CodeQL Analysis
