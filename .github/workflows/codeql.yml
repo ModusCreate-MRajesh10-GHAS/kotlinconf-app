@@ -70,7 +70,7 @@ jobs:
             --language=java \
             --source-root=. \
             --overwrite \
-            --command="./gradlew clean :shared:jvmJar :backend:jar :androidApp:assembleDebug --no-daemon --no-build-cache --no-configuration-cache"
+            --command="./gradlew clean :shared:jvmJar :backend:jar --no-daemon --no-build-cache --no-configuration-cache"
           
           # Verify database was created
           echo "Database created, contents:"
