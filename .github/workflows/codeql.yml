@@ -1,0 +1,60 @@
+name: "CodeQL Security Analysis"
+
+on:
+  push:
+    branches: [ "codeql" ]
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'java', 'javascript', 'swift' ]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 21
+      if: matrix.language == 'java'
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: 21
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        queries: +security-extended,security-and-quality
+
+    - name: Autobuild
+      if: matrix.language == 'swift'
+      uses: github/codeql-action/autobuild@v3
+
+    - name: Build Kotlin/Java components
+      if: matrix.language == 'java'
+      run: |
+        ./gradlew clean
+        ./gradlew :shared:compileKotlin
+        ./gradlew :backend:compileKotlin
+        ./gradlew :androidApp:compileDebugKotlin
+        ./gradlew :ui-components:compileKotlin
+
+    - name: Build JavaScript/Web components
+      if: matrix.language == 'javascript'
+      run: |
+        ./gradlew :shared:compileKotlinWasmJs
+        ./gradlew buildWebApp
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"
